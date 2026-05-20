@@ -1,200 +1,588 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>天気予報 (気象庁API連携)</title>
-<style>
-    body {
-        font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
-        background-color: #f4f7f6;
-        color: #333;
-        padding: 15px;
-        margin: 0;
-    }
-    h2 {
-        font-size: 1.2rem;
-        color: #0056b3;
-        border-bottom: 2px solid #0056b3;
-        padding-bottom: 5px;
-    }
-    .controls {
-        background: #fff;
-        padding: 10px;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        margin-bottom: 15px;
-    }
-    select {
-        width: 100%;
-        padding: 10px;
-        font-size: 1rem;
-        border: 1px solid #ccc;
-        border-radius: 5px;
-        background-color: #f9f9f9;
-    }
-    .weather-card {
-        background: #fff;
-        padding: 15px;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        margin-bottom: 15px;
-    }
-    .weather-card h3 {
-        margin-top: 0;
-        font-size: 1.1rem;
-        color: #444;
-    }
-    .weather-item {
-        padding: 8px 0;
-        border-bottom: 1px dashed #eee;
-    }
-    .weather-item:last-child {
-        border-bottom: none;
-    }
-    .error-msg {
-        color: #d9534f;
-        font-weight: bold;
-        background: #fdf7f7;
-        padding: 10px;
-        border-left: 5px solid #d9534f;
-    }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>精密気象・防災ボード</title>
+    <style>
+        :root {
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+            --primary: #0f52ba;
+            --primary-light: #e6f0fa;
+            --text-main: #1a1a1a;
+            --text-muted: #626262;
+            --border: #d0d7de;
+            
+            /* 防災カラー */
+            --warning-alert: #d93025;   /* 警報：赤 */
+            --warning-caution: #f9ab00; /* 注意報：黄 */
+            --warning-none: #1f883d;    /* なし：緑 */
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            padding: 12px;
+            line-height: 1.5;
+        }
+
+        .header-panel {
+            background: var(--card-bg);
+            padding: 16px;
+            border-radius: 16px;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .header-panel h1 {
+            font-size: 1.25rem;
+            margin-bottom: 12px;
+            color: var(--primary);
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 10px;
+        }
+        .form-group:last-child { margin-bottom: 0; }
+
+        .form-group label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .select-box {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 2px solid var(--border);
+            font-size: 0.95rem;
+            background-color: #fff;
+            color: var(--text-main);
+            outline: none;
+        }
+
+        .meta-info {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 8px;
+            text-align: center;
+            background: var(--primary-light);
+            padding: 6px;
+            border-radius: 6px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .card-title {
+            font-size: 1.05rem;
+            font-weight: bold;
+            color: var(--primary);
+            margin-bottom: 12px;
+            border-left: 5px solid var(--primary);
+            padding-left: 8px;
+        }
+
+        /* 警報・注意報セクション */
+        .warning-box {
+            padding: 12px;
+            border-radius: 10px;
+            color: #fff;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .warning-box.alert { background-color: var(--warning-alert); }
+        .warning-box.caution { background-color: var(--warning-caution); color: #202124; }
+        .warning-box.none { background-color: var(--warning-none); }
+
+        .warning-list {
+            margin-top: 8px;
+            background: rgba(255,255,255,0.2);
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+        }
+
+        .overview-text {
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            color: #333;
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 10px;
+        }
+
+        .sub-region-box {
+            background: #f8f9fa;
+            padding: 14px;
+            border-radius: 12px;
+            margin-bottom: 12px;
+            border: 1px solid #e1e4e8;
+        }
+
+        .sub-region-title {
+            font-weight: bold;
+            font-size: 0.95rem;
+            color: #111;
+            margin-bottom: 10px;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 4px;
+        }
+
+        .forecast-item {
+            padding: 8px 0;
+            border-bottom: 1px dashed #ddd;
+        }
+        .forecast-item:last-child { border-bottom: none; }
+
+        .item-date { font-size: 0.8rem; font-weight: bold; color: var(--text-muted); }
+        .item-main { font-size: 0.95rem; font-weight: bold; margin: 2px 0; }
+        .item-sub { font-size: 0.8rem; color: var(--text-muted); }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 6px;
+            font-size: 0.8rem;
+        }
+
+        th, td {
+            border: 1px solid var(--border);
+            padding: 8px 4px;
+            text-align: center;
+        }
+
+        th { background-color: var(--primary-light); color: var(--primary); }
+
+        .amedas-table td {
+            font-size: 0.9rem;
+            font-weight: bold;
+        }
+
+        .loading-spinner {
+            text-align: center;
+            padding: 50px;
+            font-weight: bold;
+            color: var(--text-muted);
+        }
+
+        .error-message {
+            color: #d93025;
+            background: #fce8e6;
+            padding: 12px;
+            border-radius: 10px;
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
 
-    <h2>現場エリア 天気予報</h2>
-    
-    <div class="controls">
-        <label for="area-select">予報区を選択:</label>
-        <select id="area-select">
-            <option value="">エリア情報を読み込み中...</option>
-        </select>
-    </div>
-
-    <div id="weather-content">
+    <div class="header-panel">
+        <h1>☀️ 精密気象・防災ボード 🗺️</h1>
+        
+        <div class="form-group">
+            <label for="areaSelect">地域選択（府県予報区）</label>
+            <select id="areaSelect" class="select-box">
+                <option value="250000">滋賀県 (250000)</option>
+                <option value="130000">東京都 (130000)</option>
+                <option value="016000">北海道/石狩・空知・後志 (016000)</option>
+                <option value="040000">宮城県 (040000)</option>
+                <option value="110000">埼玉県 (110000)</option>
+                <option value="120000">千葉県 (120000)</option>
+                <option value="140000">神奈川県 (140000)</option>
+                <option value="210000">岐阜県 (210000)</option>
+                <option value="220000">静岡県 (220000)</option>
+                <option value="230000">愛知県 (230000)</option>
+                <option value="260000">京都府 (260000)</option>
+                <option value="270000">大阪府 (270000)</option>
+                <option value="280000">兵庫県 (280000)</option>
+                <option value="290000">奈良県 (290000)</option>
+                <option value="340000">広島県 (340000)</option>
+                <option value="400000">福岡県 (400000)</option>
+                <option value="471000">沖縄県/本島地方 (471000)</option>
+            </select>
         </div>
 
-<script>
-    // 定数設定
-    const AREA_JSON_URL = "https://www.jma.go.jp/bosai/common/const/area.json";
-    const FORECAST_URL_BASE = "https://www.jma.go.jp/bosai/forecast/data/forecast/";
-    const DEFAULT_AREA_CODE = "250000"; // 滋賀県のコード
-    const STORAGE_KEY = "saved_weather_area";
+        <div class="form-group">
+            <label for="amedasSelect">滋賀県内 アメダス実況観測所</label>
+            <select id="amedasSelect" class="select-box">
+                <option value="61286">大津 (おおつ)</option>
+                <option value="61146">彦根 (ひこね)</option>
+                <option value="61311">信楽 (しがらき)</option>
+                <option value="61046">今津 (いまづ)</option>
+                <option value="61081">米原 (まいばら)</option>
+                <option value="61211">東近江 (ひがしおうみ)</option>
+                <option value="61011">余呉 (よご)</option>
+                <option value="61071">長浜 (ながはま)</option>
+                <option value="61196">南小松 (みなみこまつ)</option>
+                <option value="61246">堅田 (かたた)</option>
+                <option value="61296">甲賀 (こうか)</option>
+                <option value="61261">土山 (つちやま)</option>
+            </select>
+        </div>
 
-    const areaSelect = document.getElementById("area-select");
-    const weatherContent = document.getElementById("weather-content");
+        <div id="publishTime" class="meta-info">データ同期中...</div>
+    </div>
 
-    // アプリ初期化
-    async function initApp() {
-        try {
-            // 1. 予報区コード対応表の取得
-            const areaRes = await fetch(AREA_JSON_URL);
-            if (!areaRes.ok) throw new Error("エリアコードの取得に失敗しました。");
-            const areaData = await areaRes.json();
+    <div id="mainContent">
+        <div class="loading-spinner">データを解析中...</div>
+    </div>
 
-            // 2. セレクトボックスの構築
-            const offices = areaData.offices;
-            areaSelect.innerHTML = ""; // 初期テキストをクリア
+    <script>
+        const areaSelect = document.getElementById('areaSelect');
+        const amedasSelect = document.getElementById('amedasSelect');
+        const publishTimeDiv = document.getElementById('publishTime');
+        const mainContent = document.getElementById('mainContent');
+
+        let areaMaster = null;
+
+        // 風向コードマッピング(気象庁準拠 16方位)
+        const windDirections = ["静穏", "北北東", "北東", "東北東", "東", "東南東", "南東", "南南東", "南", "南南西", "南西", "西南西", "西", "西北西", "北西", "北北西", "北"];
+
+        // 警報コードマッピング
+        const warningCodeMap = {
+            "02": "暴風雪警報", "03": "大雨警報", "04": "洪水警報", "05": "暴風警報", "06": "大雪警報", "07": "波浪警報", "08": "高潮警報",
+            "10": "大雨特別警報", "12": "暴風雪特別警報", "13": "大雪特別警報", "14": "暴風特別警報", "15": "波浪特別警報", "16": "高潮特別警報",
+            "32": "風雪注意報", "33": "大雨注意報", "34": "洪水注意報", "35": "強風注意報", "36": "大雪注意報", "37": "波浪注意報", "38": "高潮注意報",
+            "39": "雷注意報", "40": "融雪注意報", "41": "濃霧注意報", "42": "乾燥注意報", "43": "なだれ注意報", "44": "低温注意報", "45": "霜注意報",
+            "46": "着氷注意報", "47": "着雪注意報"
+        };
+
+        function getWeatherEmoji(code) {
+            if (!code) return '❓';
+            const c = code.charAt(0);
+            if (c === '1') return '☀️';
+            if (c === '2') return '☁️';
+            if (c === '3') return '🌧️';
+            if (c === '4') return '❄️';
+            return '✨';
+        }
+
+        function formatDateTime(isoString) {
+            const d = new Date(isoString);
+            return `${d.getMonth()+1}/${d.getDate()}(${['日','月','火','水','木','金','土'][d.getDay()]}) ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        }
+
+        function formatAmedasTime(timeStr) {
+            if (!timeStr || timeStr.length < 12) return '不明';
+            return `${parseInt(timeStr.substring(4,6))}/${parseInt(timeStr.substring(6,8))} ${timeStr.substring(8,10)}:${timeStr.substring(10,12)}`;
+        }
+
+        async function loadAreaMaster() {
+            try {
+                const res = await fetch('https://www.jma.go.jp/bosai/common/const/area.json');
+                areaMaster = await res.json();
+            } catch (e) {
+                console.error("地域マスタの同期に失敗", e);
+            }
+        }
+
+        function getAreaHierarchy(classCode, areaCode) {
+            if (!areaMaster) return { officeName: '', className: '' };
+            const officeName = areaMaster.offices?.[classCode]?.name || '';
+            const className = areaMaster.class10s?.[areaCode]?.name || areaMaster.class15s?.[areaCode]?.name || '';
+            return { officeName, className };
+        }
+
+        // 全データを一括取得して反映するメイン関数
+// 全データを一括取得して反映するメイン関数
+        async function loadAllWeatherData() {
+            mainContent.innerHTML = '<div class="loading-spinner">最新の気象・防災実況データを解析中...</div>';
             
-            // 前回選択したエリア（なければデフォルトの滋賀県南部を含む滋賀県コード）
-            let savedAreaCode = localStorage.getItem(STORAGE_KEY) || DEFAULT_AREA_CODE;
+            const classCode = areaSelect.value;
+            const amedasCode = amedasSelect.value;
 
-            for (const [code, info] of Object.entries(offices)) {
-                const option = document.createElement("option");
-                option.value = code;
-                option.textContent = info.name;
-                if (code === savedAreaCode) {
-                    option.selected = true;
+            if (!areaMaster) await loadAreaMaster();
+
+            try {
+                // 【修正】1. アメダスの最新観測時刻を先に取得する
+                const timeRes = await fetch('https://www.jma.go.jp/bosai/amedas/data/latest_time.txt');
+                if (!timeRes.ok) throw new Error('アメダス最新時刻の取得に失敗しました。');
+                const timeStr = await timeRes.text(); // 例: "2024-05-21T08:00:00+09:00"
+                
+                // 【修正】2. 取得した時刻（ISO形式）を YYYYMMDDHHMM00 形式の文字列に変換
+                const d = new Date(timeStr);
+                const yyyy = d.getFullYear();
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                const hh = String(d.getHours()).padStart(2, '0');
+                const min = String(d.getMinutes()).padStart(2, '0');
+                const amedasTimeCode = `${yyyy}${mm}${dd}${hh}${min}00`;
+
+                // 4つのエンドポイントから並列でデータを取得（アメダスのURLを時刻指定のものに修正）
+                const [forecastRes, overviewRes, warningRes, amedasRes] = await Promise.all([
+                    fetch(`https://www.jma.go.jp/bosai/forecast/data/forecast/${classCode}.json`),
+                    fetch(`https://www.jma.go.jp/bosai/forecast/data/overview_forecast/${classCode}.json`),
+                    fetch(`https://www.jma.go.jp/bosai/warning/data/warning/${classCode}.json`),
+                    fetch(`https://www.jma.go.jp/bosai/amedas/data/map/${amedasTimeCode}.json`)
+                ]);
+
+                if (!forecastRes.ok || !overviewRes.ok || !warningRes.ok || !amedasRes.ok) {
+                    throw new Error('気象庁APIからのデータロードに失敗しました。');
                 }
-                areaSelect.appendChild(option);
+
+                const forecast = await forecastRes.json();
+                const overview = await overviewRes.json();
+                const warningData = await warningRes.json();
+                const amedasAll = await amedasRes.json();
+
+                const pubDate = new Date(forecast[0].reportDatetime);
+                publishTimeDiv.innerText = `予報区: ${classCode} ｜ 同期: ${formatDateTime(pubDate)}`;
+
+                // 【修正】3. アメダスの観測時刻（amedasTimeCode）を renderApp に渡す
+                renderApp(classCode, amedasCode, forecast, overview, warningData, amedasAll, amedasTimeCode);
+            } catch (error) {
+                mainContent.innerHTML = `<div class="error-message"><b>データ解析エラー</b><br>${error.message}</div>`;
+                console.error(error);
+            }
+        }
+        function renderApp(classCode, amedasCode, forecast, overview, warningData, amedasAll, amedasTimeCode) {
+            let html = '';
+
+            // ================= 1. 防災気象情報カード =================
+            let alertLevel = 'none'; // none, caution, alert
+            let activeWarnings = [];
+            
+            // 警報情報の抽出
+            if (warningData && warningData.areaTypes) {
+                const class10sGroup = warningData.areaTypes.find(t => t.type === "class10s" || t.type === "class15s");
+                if (class10sGroup && class10sGroup.areas) {
+                    class10sGroup.areas.forEach(area => {
+                        if (area.warnings) {
+                            area.warnings.forEach(w => {
+                                if (w.status && w.status !== "解除" && w.status !== "発表警報・注意報はなし") {
+                                    const name = warningCodeMap[w.code] || `未定義の気象情報(${w.code})`;
+                                    if (!activeWarnings.includes(name)) {
+                                        activeWarnings.push(name);
+                                        if (w.code.startsWith('0') || w.code.startsWith('1')) {
+                                            alertLevel = 'alert'; // 警報・特別警報
+                                        } else if (alertLevel !== 'alert' && w.code.startsWith('3') || w.code.startsWith('4')) {
+                                            alertLevel = 'caution'; // 注意報
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    });
+                }
             }
 
-            // 3. イベントリスナーの設定（選択変更時に記憶して再描画）
-            areaSelect.addEventListener("change", (e) => {
-                const newCode = e.target.value;
-                localStorage.setItem(STORAGE_KEY, newCode);
-                fetchWeatherData(newCode);
-            });
+            let warningHeader = "🟢 現在、発表中の警報・注意報はありません";
+            if (alertLevel === 'alert') warningHeader = "🚨 【警報】が発表されています！";
+            if (alertLevel === 'caution') warningHeader = "⚠️ 【注意報】が発表されています";
 
-            // 4. 初回の天気データ取得
-            fetchWeatherData(savedAreaCode);
+            html += `
+                <div class="card">
+                    <div class="card-title">🚨 防災気象情報 (${warningData.publishingOffice || '気象台'})</div>
+                    <div class="warning-box ${alertLevel}">
+                        ${warningHeader}
+                        ${activeWarnings.length > 0 ? `<div class="warning-list">${activeWarnings.join(' ／ ')}</div>` : ''}
+                    </div>
+                    ${warningData.headline ? `<div class="item-sub" style="font-weight:bold; color:#d93025;">見出し: ${warningData.headline}</div>` : ''}
+                </div>
+            `;
 
-        } catch (error) {
-            showError(`初期化エラー: ${error.message}`);
-        }
-    }
-
-    // 天気データの取得と解析
-    async function fetchWeatherData(areaCode) {
-        weatherContent.innerHTML = "<p>データを読み込み中...</p>";
-        
-        try {
-            const res = await fetch(`${FORECAST_URL_BASE}${areaCode}.json`);
-            if (!res.ok) throw new Error(`HTTPエラー: ${res.status}`);
+ // ================= 2. アメダス最新実況カード =================
+            const currentAmedas = amedasAll[amedasCode];
+            const amedasStationName = amedasSelect.options[amedasSelect.selectedIndex].text;
             
-            const data = await res.json();
+            html += `
+                <div class="card">
+                    <div class="card-title">📊 滋賀県アメダス実況 (${amedasStationName})</div>
+            `;
+
+            if (currentAmedas) {
+                // 【修正】アメダスJSON内には time プロパティがないため、渡された amedasTimeCode を使う
+                const aTime = formatAmedasTime(amedasTimeCode);
+                
+                const temp = currentAmedas.temp?.[0] !== undefined ? `${currentAmedas.temp[0]} ℃` : '---';
+                const rain = currentAmedas.precipitation1h?.[0] !== undefined ? `${currentAmedas.precipitation1h[0]} mm/h` : '0.0 mm/h';
+                const windSp = currentAmedas.wind?.[0] !== undefined ? `${currentAmedas.wind[0]} m/s` : '---';
+                const windDirIdx = currentAmedas.windDirection?.[0];
+                const windDir = (windDirIdx !== undefined && windDirections[windDirIdx]) ? windDirections[windDirIdx] : '---';
+                const hum = currentAmedas.humidity?.[0] !== undefined ? `${currentAmedas.humidity[0]} %` : '---';
+                const sun = currentAmedas.sun1h?.[0] !== undefined ? `${currentAmedas.sun1h[0]} 時間` : '---';
+
+                html += `
+                    <div style="font-size:0.75rem; text-align:right; color:var(--text-muted); margin-bottom:6px;">観測日時: ${aTime}</div>
+                    <table class="amedas-table">
+                        <tr>
+                            <th>気温</th>
+                            <th>降水量</th>
+                            <th>湿度</th>
+                        </tr>
+                        <tr>
+                            <td style="color:#d93025;">${temp}</td>
+                            <td style="color:var(--primary);">${rain}</td>
+                            <td>${hum}</td>
+                        </tr>
+                        <tr>
+                            <th>風向</th>
+                            <th>風速</th>
+                            <th>日照時間(直近1h)</th>
+                        </tr>
+                        <tr>
+                            <td>${windDir}</td>
+                            <td>${windSp}</td>
+                            <td style="color:#f9ab00;">${sun}</td>
+                        </tr>
+                    </table>
+                `;
+            } else {
+                html += `<div class="overview-text">指定した観測所の実況データをパースできませんでした。</div>`;
+            }
+            html += `</div>`;
+
+            // ================= 3. 天気概況カード =================
+            html += `
+                <div class="card">
+                    <div class="card-title">📄 天気概況 (${overview.publishingOffice})</div>
+                    <div class="overview-text">${overview.text}</div>
+                </div>
+            `;
+
+            // ================= 4. 短期詳細予報 =================
+            const shortData = forecast[0];
+            const shortTimes = shortData.timeSeries[0].timeDefines;
             
-            // データ解析処理（ここでエラーが起きやすい）
-            renderWeather(data);
+            html += `<div class="card"><div class="card-title">📍 区域・代表地点別 詳細予報</div>`;
+            
+            shortData.timeSeries[0].areas.forEach((areaWeather) => {
+                const currentAreaCode = areaWeather.area.code;
+                const hierarchy = getAreaHierarchy(classCode, currentAreaCode);
+                const formalName = hierarchy.className || areaWeather.area.name;
+                
+                html += `
+                    <div class="sub-region-box">
+                        <div class="sub-region-title">⚖️ ${areaWeather.area.name} 区域</div>
+                        <div style="margin-bottom:8px; font-size:0.7rem; color:var(--text-muted);">
+                            細分区域名: ${formalName} (${currentAreaCode})
+                        </div>
+                `;
 
-        } catch (error) {
-            console.error("Fetch Error:", error);
-            showError("データ解析エラー: 気象庁APIからのデータロードに失敗しました。<br>詳細: " + error.message);
-        }
-    }
+                shortTimes.forEach((time, idx) => {
+                    const code = areaWeather.weatherCodes ? areaWeather.weatherCodes[idx] : '';
+                    const text = areaWeather.weathers ? areaWeather.weathers[idx] : '情報なし';
+                    const wind = areaWeather.winds ? areaWeather.winds[idx] : 'なし';
+                    const wave = areaWeather.waves ? areaWeather.waves[idx] : null;
 
-    // 天気データの表示描画
-    function renderWeather(data) {
-        weatherContent.innerHTML = ""; // クリア
-
-        try {
-            // 気象庁のデータは data[0] が直近の予報、data[1] が週間予報
-            // 直近の予報 (timeSeries[0] は天気, timeSeries[2] は気温など)
-            const weatherTimeSeries = data[0].timeSeries[0];
-            const timeDefines = weatherTimeSeries.timeDefines;
-            const areas = weatherTimeSeries.areas;
-
-            areas.forEach(areaInfo => {
-                const areaName = areaInfo.area.name;
-                const weathers = areaInfo.weathers;
-
-                // カード要素の作成
-                let html = `<div class="weather-card">`;
-                html += `<h3>${areaName}</h3>`;
-
-                // 取得できた時間枠の分だけループして表示
-                weathers.forEach((weatherText, index) => {
-                    // 日時のフォーマット整形
-                    const dateObj = new Date(timeDefines[index]);
-                    const dateStr = `${dateObj.getMonth() + 1}/${dateObj.getDate()} ${dateObj.getHours()}:00~`;
-                    
                     html += `
-                        <div class="weather-item">
-                            <strong>${dateStr}</strong><br>
-                            ${weatherText}
+                        <div class="forecast-item">
+                            <div class="item-date">▼ ${formatDateTime(time)} 予報</div>
+                            <div class="item-main">${getWeatherEmoji(code)} ${text}</div>
+                            <div class="item-sub">💨 風: ${wind}</div>
+                            ${wave && wave !== '０メートル' ? `<div class="item-sub">🌊 波: ${wave}</div>` : ''}
                         </div>
                     `;
                 });
 
+                // 時間帯別降水確率
+                if (shortData.timeSeries[1]) {
+                    const popArea = shortData.timeSeries[1].areas.find(a => a.area.code === currentAreaCode);
+                    if (popArea) {
+                        html += `
+                            <table style="margin-top:12px;">
+                                <tr><th colspan="${shortData.timeSeries[1].timeDefines.length}">時間帯別 降水確率</th></tr>
+                                <tr>
+                        `;
+                        shortData.timeSeries[1].timeDefines.forEach(t => {
+                            html += `<td>${new Date(t).getHours()}時</td>`;
+                        });
+                        html += `</tr><tr>`;
+                        popArea.pops.forEach(pop => {
+                            html += `<td style="font-weight:bold; color:var(--primary);">${pop}%</td>`;
+                        });
+                        html += `</tr></table>`;
+                    }
+                }
                 html += `</div>`;
-                weatherContent.innerHTML += html;
             });
+            html += `</div>`;
 
-        } catch (error) {
-            console.error("Parse Error:", error);
-            showError("データ解析エラー: データの構造が予期せぬ形式です。<br>詳細: " + error.message);
+            // ================= 5. 週間天気予報 =================
+            if (forecast[1]) {
+                const longData = forecast[1];
+                const longTimes = longData.timeSeries[0].timeDefines;
+                
+                html += `<div class="card"><div class="card-title">📅 週間天気予報</div>`;
+                
+                longData.timeSeries[0].areas.forEach((la, lIdx) => {
+                    const longTempAreas = longData.timeSeries[1] ? longData.timeSeries[1].areas : [];
+                    
+                    html += `
+                        <div class="sub-region-box">
+                            <div class="sub-region-title">📍 ${la.area.name} 周辺エリア</div>
+                            <table>
+                                <tr>
+                                    <th>予報日程</th>
+                                    <th>天気</th>
+                                    <th>降水</th>
+                                    <th>最低/最高気温</th>
+                                </tr>
+                    `;
+
+                    longTimes.forEach((ld, dIdx) => {
+                        const code = la.weatherCodes[dIdx];
+                        const pop = la.pops[dIdx] ? la.pops[dIdx] + '%' : '-';
+                        
+                        let minT = '-';
+                        let maxT = '-';
+                        if (longTempAreas[lIdx]) {
+                            minT = longTempAreas[lIdx].tempsMin[dIdx] || '-';
+                            maxT = longTempAreas[lIdx].tempsMax[dIdx] || '-';
+                        }
+
+                        html += `
+                            <tr>
+                                <td style="font-weight:bold;">${formatDateTime(ld).split(' ')[0]}</td>
+                                <td style="font-size:1.1rem;">${getWeatherEmoji(code)}</td>
+                                <td style="color:var(--primary); font-weight:bold;">${pop}</td>
+                                <td><span style="color:blue;">${minT}</span> / <span style="color:red;">${maxT}</span></td>
+                            </tr>
+                        `;
+                    });
+                    html += `</table></div>`;
+                });
+                html += `</div>`;
+            }
+
+            mainContent.innerHTML = html;
         }
-    }
 
-    // エラー表示用関数
-    function showError(message) {
-        weatherContent.innerHTML = `<div class="error-msg">${message}</div>`;
-    }
+        // イベント制御
+        areaSelect.addEventListener('change', (e) => {
+            localStorage.setItem('saved_jma_area_v3', e.target.value);
+            loadAllWeatherData();
+        });
 
-    // アプリ起動
-    initApp();
+        amedasSelect.addEventListener('change', (e) => {
+            localStorage.setItem('saved_jma_amedas_v3', e.target.value);
+            loadAllWeatherData();
+        });
 
-</script>
+        // アプリ起動時の初期処理
+        window.addEventListener('DOMContentLoaded', () => {
+            const cachedArea = localStorage.getItem('saved_jma_area_v3') || '250000'; // デフォルト：滋賀県
+            const cachedAmedas = localStorage.getItem('saved_jma_amedas_v3') || '61286'; // デフォルト：大津
+            
+            areaSelect.value = cachedArea;
+            amedasSelect.value = cachedAmedas;
+            
+            loadAllWeatherData();
+        });
+    </script>
 </body>
 </html>
