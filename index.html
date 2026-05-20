@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>詳細気象ボード (気象庁完全解析)</title>
     <style>
+        /* CSSは前回と同じです */
         :root {
             --bg-color: #f0f4f8;
             --card-bg: #ffffff;
@@ -160,6 +161,7 @@
             padding: 12px;
             border-radius: 10px;
             text-align: center;
+            word-break: break-all;
         }
     </style>
 </head>
@@ -198,7 +200,6 @@
         const publishTimeDiv = document.getElementById('publishTime');
         const mainContent = document.getElementById('mainContent');
 
-        // 気象庁のエリア情報を格納するマスター（初期起動時に自動ダウンロード）
         let areaMaster = null;
 
         function getWeatherEmoji(code) {
@@ -216,7 +217,6 @@
             return `${d.getMonth()+1}/${d.getDate()}(${['日','月','火','水','木','金','土'][d.getDay()]}) ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
         }
 
-        // 1. 最初に気象庁の地域マスターデータを取得する
         async function loadAreaMaster() {
             try {
                 const res = await fetch('https://www.jma.go.jp/bosai/common/const/area.json');
@@ -226,18 +226,17 @@
             }
         }
 
-        // エリアコードから詳細な構造名称を特定するヘルパー
+        // 【修正点】オプショナルチェーン(?.)や存在確認を用いて、エラーを回避します
         function getAreaHierarchy(classCode, areaCode) {
-            if (!areaMaster) return { officesName:'', className: '', amedasName: '' };
+            if (!areaMaster) return { officeName: '', className: '' };
             
-            const office = areaMaster.offices[classCode] ? areaMaster.offices[classCode].name : '';
-            const class1 = areaMaster.class15s[areaCode] ? areaMaster.class15s[areaCode].name : '';
-            const amedas = areaMaster.amedas[areaCode] ? areaMaster.amedas[areaCode].name : '';
+            const officeName = areaMaster.offices?.[classCode]?.name || '';
+            // 一次細分区域は class10s に、市町村等をまとめた地域は class15s に入っています
+            const className = areaMaster.class10s?.[areaCode]?.name || areaMaster.class15s?.[areaCode]?.name || '';
             
-            return { office, class1, amedas };
+            return { officeName, className };
         }
 
-        // 2. 気象データの取得と詳細解析
         async function loadWeatherDetail(classCode) {
             mainContent.innerHTML = '<div class="loading-spinner">最新の気象構造を解析中...</div>';
             
@@ -256,17 +255,16 @@
                 const forecast = await forecastRes.json();
                 const overview = await overviewRes.json();
 
-                // 発表日時の表示
                 const pubDate = new Date(forecast[0].reportDatetime);
                 publishTimeDiv.innerText = `府県予報区コード: ${classCode} ｜ 発表: ${formatDateTime(pubDate)}`;
 
                 renderDetailedApp(classCode, forecast, overview);
             } catch (error) {
                 mainContent.innerHTML = `<div class="error-message"><b>エラーが発生しました</b><br>${error.message}</div>`;
+                console.error(error);
             }
         }
 
-        // 3. レンダリング処理
         function renderDetailedApp(classCode, forecast, overview) {
             let html = '';
 
@@ -278,35 +276,30 @@
                 </div>
             `;
 
-            // データソースの分離
-            const shortData = forecast[0]; // 短期予報(今日・明日・明後日)
-            const longData = forecast[1];  // 週間予報
-
-            // タイムライン配列
+            const shortData = forecast[0]; 
+            const longData = forecast[1];  
             const shortTimes = shortData.timeSeries[0].timeDefines;
 
-            // --- 短期詳細予報（一次細分・区域・代表地点の結合） ---
+            // --- 短期詳細予報 ---
             html += `<div class="card"><div class="card-title">📍 区域・代表地点別 詳細予報</div>`;
-
-            // 天気/風/波のエリアグループ
             const weatherAreas = shortData.timeSeries[0].areas;
             
             weatherAreas.forEach((areaWeather) => {
                 const currentAreaCode = areaWeather.area.code;
                 
-                // マスターデータから階層構造をひも付け
+                // 【修正点】修正した関数から正式名称を取得します
                 const hierarchy = getAreaHierarchy(classCode, currentAreaCode);
+                const formalName = hierarchy.className || areaWeather.area.name;
                 
                 html += `
                     <div class="sub-region-box">
                         <div class="sub-region-title">⚖️ ${areaWeather.area.name} 区域</div>
                         <div class="region-badge-container">
-                            <span class="badge badge-primary">府県予報区: ${hierarchy.office || '不明'} (${classCode})</span>
-                            <span class="badge badge-green">一次細分区域: ${hierarchy.class1 || areaWeather.area.name} (${currentAreaCode})</span>
+                            <span class="badge badge-primary">府県予報区: ${hierarchy.officeName || '不明'} (${classCode})</span>
+                            <span class="badge badge-green">細分区域: ${formalName} (${currentAreaCode})</span>
                         </div>
                 `;
 
-                // 日ごとの詳細天気・風・波の出力
                 shortTimes.forEach((time, idx) => {
                     const code = areaWeather.weatherCodes ? areaWeather.weatherCodes[idx] : '';
                     const text = areaWeather.weathers ? areaWeather.weathers[idx] : '情報なし';
@@ -323,7 +316,7 @@
                     `;
                 });
 
-                // --- 同区域内の「降水確率」のひも付け ---
+                // 降水確率
                 if (shortData.timeSeries[1]) {
                     const popArea = shortData.timeSeries[1].areas.find(a => a.area.code === currentAreaCode);
                     if (popArea) {
@@ -343,18 +336,10 @@
                     }
                 }
 
-                // --- 同区域内の「代表地点名・コード」および「気温予報」のひも付け ---
+                // 気温予測
                 if (shortData.timeSeries[2]) {
                     const tempTimes = shortData.timeSeries[2].timeDefines;
-                    // 気温用エリアの中に、この区域に対応する地点があるか探索
-                    const tempAreas = shortData.timeSeries[2].areas.filter(a => {
-                        // 簡易的に親のエリアコードや地方名に関連するか、マスタのamedas等から判定
-                        // 気象庁APIは気温は代表地点名（例: 大津）で直接入るため、名称またはコードの一部で紐付けます
-                        return true; // 今回はすべて表示するか、該当府県内の全代表地点を表示
-                    });
-
-                    // 重複を防ぎつつ、この府県予報区に属する代表地点の気温情報を出力
-                    // (※短期予報のtimeSeries[2]には、その府県内の主要な代表地点が並びます)
+                    
                     html += `<div style="margin-top:10px; font-size:0.8rem; background:#fff; padding:8px; border-radius:6px; border:1px solid #eee;">`;
                     html += `<b>📌 代表地点の気温予測:</b>`;
                     
@@ -372,12 +357,11 @@
                     html += `</div>`;
                 }
 
-                html += `</div>`; // sub-region-box end
+                html += `</div>`; 
             });
+            html += `</div>`;
 
-            html += `</div>`; // card end
-
-            // --- 週間天気予報カード（一次細分・代表地点ベース） ---
+            // --- 週間天気予報カード ---
             if (longData) {
                 const longTimes = longData.timeSeries[0].timeDefines;
                 const longAreas = longData.timeSeries[0].areas;
@@ -421,26 +405,21 @@
                             </tr>
                         `;
                     });
-
                     html += `</table></div>`;
                 });
-
                 html += `</div>`;
             }
-
             mainContent.innerHTML = html;
         }
 
-        // イベントリスナー
         areaSelect.addEventListener('change', (e) => {
             const selected = e.target.value;
             localStorage.setItem('saved_jma_area_detailed', selected);
             loadWeatherDetail(selected);
         });
 
-        // 初期ロード
         window.addEventListener('DOMContentLoaded', () => {
-            const cachedArea = localStorage.getItem('saved_jma_area_detailed') || '250000'; // 初期値は滋賀県(250000)
+            const cachedArea = localStorage.getItem('saved_jma_area_detailed') || '250000';
             areaSelect.value = cachedArea;
             loadWeatherDetail(cachedArea);
         });
