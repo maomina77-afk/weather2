@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>詳細気象ボード (気象庁完全解析)</title>
+    <style>
+        :root {
+            --bg-color: #f0f4f8;
+            --card-bg: #ffffff;
+            --primary: #0f52ba;
+            --primary-light: #e6f0fa;
+            --text-main: #1a1a1a;
+            --text-muted: #626262;
+            --border: #d0d7de;
+            --accent-green: #1f883d;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            padding: 12px;
+            line-height: 1.5;
+        }
+
+        .header-panel {
+            background: var(--card-bg);
+            padding: 16px;
+            border-radius: 16px;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .header-panel h1 {
+            font-size: 1.3rem;
+            margin-bottom: 12px;
+            color: var(--primary);
+            text-align: center;
+        }
+
+        .select-box {
+            width: 100%;
+            padding: 12px;
+            border-radius: 10px;
+            border: 2px solid var(--border);
+            font-size: 1rem;
+            background-color: #fff;
+            color: var(--text-main);
+            outline: none;
+        }
+
+        .meta-info {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 8px;
+            text-align: center;
+            background: var(--primary-light);
+            padding: 6px;
+            border-radius: 6px;
+            font-weight: bold;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: var(--primary);
+            margin-bottom: 12px;
+            border-left: 5px solid var(--primary);
+            padding-left: 8px;
+        }
+
+        .overview-text {
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            color: #333;
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 10px;
+        }
+
+        .region-badge-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+
+        .badge {
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-weight: bold;
+        }
+        .badge-primary { background: var(--primary-light); color: var(--primary); }
+        .badge-green { background: #dafbe1; color: var(--accent-green); }
+
+        .sub-region-box {
+            background: #f8f9fa;
+            padding: 14px;
+            border-radius: 12px;
+            margin-bottom: 12px;
+            border: 1px solid #e1e4e8;
+        }
+
+        .sub-region-title {
+            font-weight: bold;
+            font-size: 1rem;
+            color: #111;
+            margin-bottom: 10px;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 4px;
+        }
+
+        .forecast-item {
+            padding: 8px 0;
+            border-bottom: 1px dashed #ddd;
+        }
+        .forecast-item:last-child { border-bottom: none; }
+
+        .item-date { font-size: 0.85rem; font-weight: bold; color: var(--text-muted); }
+        .item-main { font-size: 0.95rem; font-weight: bold; margin: 2px 0; }
+        .item-sub { font-size: 0.8rem; color: var(--text-muted); }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 6px;
+            font-size: 0.8rem;
+        }
+
+        th, td {
+            border: 1px solid var(--border);
+            padding: 6px 4px;
+            text-align: center;
+        }
+
+        th { background-color: var(--primary-light); color: var(--primary); }
+
+        .loading-spinner {
+            text-align: center;
+            padding: 50px;
+            font-weight: bold;
+            color: var(--text-muted);
+        }
+
+        .error-message {
+            color: #d93025;
+            background: #fce8e6;
+            padding: 12px;
+            border-radius: 10px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header-panel">
+        <h1>☀️ 精密天気ボード 🗺️</h1>
+        <select id="areaSelect" class="select-box">
+            <option value="250000">滋賀県 (250000)</option>
+            <option value="130000">東京都 (130000)</option>
+            <option value="016000">北海道/石狩・空知・後志 (016000)</option>
+            <option value="040000">宮城県 (040000)</option>
+            <option value="110000">埼玉県 (110000)</option>
+            <option value="120000">千葉県 (120000)</option>
+            <option value="140000">神奈川県 (140000)</option>
+            <option value="210000">岐阜県 (210000)</option>
+            <option value="220000">静岡県 (220000)</option>
+            <option value="230000">愛知県 (230000)</option>
+            <option value="260000">京都府 (260000)</option>
+            <option value="270000">大阪府 (270000)</option>
+            <option value="280000">兵庫県 (280000)</option>
+            <option value="290000">奈良県 (290000)</option>
+            <option value="340000">広島県 (340000)</option>
+            <option value="400000">福岡県 (400000)</option>
+            <option value="471000">沖縄県/本島地方 (471000)</option>
+        </select>
+        <div id="publishTime" class="meta-info">発表日時: 取得中...</div>
+    </div>
+
+    <div id="mainContent">
+        <div class="loading-spinner">データを解析中...</div>
+    </div>
+
+    <script>
+        const areaSelect = document.getElementById('areaSelect');
+        const publishTimeDiv = document.getElementById('publishTime');
+        const mainContent = document.getElementById('mainContent');
+
+        // 気象庁のエリア情報を格納するマスター（初期起動時に自動ダウンロード）
+        let areaMaster = null;
+
+        function getWeatherEmoji(code) {
+            if (!code) return '❓';
+            const c = code.charAt(0);
+            if (c === '1') return '☀️';
+            if (c === '2') return '☁️';
+            if (c === '3') return '🌧️';
+            if (c === '4') return '❄️';
+            return '✨';
+        }
+
+        function formatDateTime(isoString) {
+            const d = new Date(isoString);
+            return `${d.getMonth()+1}/${d.getDate()}(${['日','月','火','水','木','金','土'][d.getDay()]}) ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        }
+
+        // 1. 最初に気象庁の地域マスターデータを取得する
+        async function loadAreaMaster() {
+            try {
+                const res = await fetch('https://www.jma.go.jp/bosai/common/const/area.json');
+                areaMaster = await res.json();
+            } catch (e) {
+                console.error("地域マスタの取得に失敗しました", e);
+            }
+        }
+
+        // エリアコードから詳細な構造名称を特定するヘルパー
+        function getAreaHierarchy(classCode, areaCode) {
+            if (!areaMaster) return { officesName:'', className: '', amedasName: '' };
+            
+            const office = areaMaster.offices[classCode] ? areaMaster.offices[classCode].name : '';
+            const class1 = areaMaster.class15s[areaCode] ? areaMaster.class15s[areaCode].name : '';
+            const amedas = areaMaster.amedas[areaCode] ? areaMaster.amedas[areaCode].name : '';
+            
+            return { office, class1, amedas };
+        }
+
+        // 2. 気象データの取得と詳細解析
+        async function loadWeatherDetail(classCode) {
+            mainContent.innerHTML = '<div class="loading-spinner">最新の気象構造を解析中...</div>';
+            
+            if (!areaMaster) {
+                await loadAreaMaster();
+            }
+
+            try {
+                const [forecastRes, overviewRes] = await Promise.all([
+                    fetch(`https://www.jma.go.jp/bosai/forecast/data/forecast/${classCode}.json`),
+                    fetch(`https://www.jma.go.jp/bosai/forecast/data/overview_forecast/${classCode}.json`)
+                ]);
+
+                if (!forecastRes.ok || !overviewRes.ok) throw new Error('APIデータの取得に失敗しました');
+
+                const forecast = await forecastRes.json();
+                const overview = await overviewRes.json();
+
+                // 発表日時の表示
+                const pubDate = new Date(forecast[0].reportDatetime);
+                publishTimeDiv.innerText = `府県予報区コード: ${classCode} ｜ 発表: ${formatDateTime(pubDate)}`;
+
+                renderDetailedApp(classCode, forecast, overview);
+            } catch (error) {
+                mainContent.innerHTML = `<div class="error-message"><b>エラーが発生しました</b><br>${error.message}</div>`;
+            }
+        }
+
+        // 3. レンダリング処理
+        function renderDetailedApp(classCode, forecast, overview) {
+            let html = '';
+
+            // --- 天気概況カード ---
+            html += `
+                <div class="card">
+                    <div class="card-title">📄 天気概況 (${overview.publishingOffice})</div>
+                    <div class="overview-text">${overview.text}</div>
+                </div>
+            `;
+
+            // データソースの分離
+            const shortData = forecast[0]; // 短期予報(今日・明日・明後日)
+            const longData = forecast[1];  // 週間予報
+
+            // タイムライン配列
+            const shortTimes = shortData.timeSeries[0].timeDefines;
+
+            // --- 短期詳細予報（一次細分・区域・代表地点の結合） ---
+            html += `<div class="card"><div class="card-title">📍 区域・代表地点別 詳細予報</div>`;
+
+            // 天気/風/波のエリアグループ
+            const weatherAreas = shortData.timeSeries[0].areas;
+            
+            weatherAreas.forEach((areaWeather) => {
+                const currentAreaCode = areaWeather.area.code;
+                
+                // マスターデータから階層構造をひも付け
+                const hierarchy = getAreaHierarchy(classCode, currentAreaCode);
+                
+                html += `
+                    <div class="sub-region-box">
+                        <div class="sub-region-title">⚖️ ${areaWeather.area.name} 区域</div>
+                        <div class="region-badge-container">
+                            <span class="badge badge-primary">府県予報区: ${hierarchy.office || '不明'} (${classCode})</span>
+                            <span class="badge badge-green">一次細分区域: ${hierarchy.class1 || areaWeather.area.name} (${currentAreaCode})</span>
+                        </div>
+                `;
+
+                // 日ごとの詳細天気・風・波の出力
+                shortTimes.forEach((time, idx) => {
+                    const code = areaWeather.weatherCodes ? areaWeather.weatherCodes[idx] : '';
+                    const text = areaWeather.weathers ? areaWeather.weathers[idx] : '情報なし';
+                    const wind = areaWeather.winds ? areaWeather.winds[idx] : 'なし';
+                    const wave = areaWeather.waves ? areaWeather.waves[idx] : null;
+
+                    html += `
+                        <div class="forecast-item">
+                            <div class="item-date">▼ ${formatDateTime(time)} 予報</div>
+                            <div class="item-main">${getWeatherEmoji(code)} ${text}</div>
+                            <div class="item-sub">💨 風: ${wind}</div>
+                            ${wave && wave !== '０メートル' ? `<div class="item-sub">🌊 波: ${wave}</div>` : ''}
+                        </div>
+                    `;
+                });
+
+                // --- 同区域内の「降水確率」のひも付け ---
+                if (shortData.timeSeries[1]) {
+                    const popArea = shortData.timeSeries[1].areas.find(a => a.area.code === currentAreaCode);
+                    if (popArea) {
+                        html += `
+                            <table style="margin-top:12px;">
+                                <tr><th colspan="${shortData.timeSeries[1].timeDefines.length}">時間帯別 降水確率</th></tr>
+                                <tr>
+                        `;
+                        shortData.timeSeries[1].timeDefines.forEach(t => {
+                            html += `<td>${new Date(t).getHours()}時</td>`;
+                        });
+                        html += `</tr><tr>`;
+                        popArea.pops.forEach(pop => {
+                            html += `<td style="font-weight:bold; color:var(--primary);">${pop}%</td>`;
+                        });
+                        html += `</tr></table>`;
+                    }
+                }
+
+                // --- 同区域内の「代表地点名・コード」および「気温予報」のひも付け ---
+                if (shortData.timeSeries[2]) {
+                    const tempTimes = shortData.timeSeries[2].timeDefines;
+                    // 気温用エリアの中に、この区域に対応する地点があるか探索
+                    const tempAreas = shortData.timeSeries[2].areas.filter(a => {
+                        // 簡易的に親のエリアコードや地方名に関連するか、マスタのamedas等から判定
+                        // 気象庁APIは気温は代表地点名（例: 大津）で直接入るため、名称またはコードの一部で紐付けます
+                        return true; // 今回はすべて表示するか、該当府県内の全代表地点を表示
+                    });
+
+                    // 重複を防ぎつつ、この府県予報区に属する代表地点の気温情報を出力
+                    // (※短期予報のtimeSeries[2]には、その府県内の主要な代表地点が並びます)
+                    html += `<div style="margin-top:10px; font-size:0.8rem; background:#fff; padding:8px; border-radius:6px; border:1px solid #eee;">`;
+                    html += `<b>📌 代表地点の気温予測:</b>`;
+                    
+                    shortData.timeSeries[2].areas.forEach(ta => {
+                        html += `<div style="margin-top:4px; display:flex; justify-content:space-between;">`;
+                        html += `<span>↳ 地点: <b>${ta.area.name}</b> (コード: ${ta.area.code})</span>`;
+                        
+                        let tStr = [];
+                        tempTimes.forEach((tt, tIdx) => {
+                            if(ta.temps[tIdx]) tStr.push(`${new Date(tt).getHours()}時:${ta.temps[tIdx]}℃`);
+                        });
+                        html += `<span style="color:#d93025; font-weight:bold;">${tStr.join(' / ')}</span>`;
+                        html += `</div>`;
+                    });
+                    html += `</div>`;
+                }
+
+                html += `</div>`; // sub-region-box end
+            });
+
+            html += `</div>`; // card end
+
+            // --- 週間天気予報カード（一次細分・代表地点ベース） ---
+            if (longData) {
+                const longTimes = longData.timeSeries[0].timeDefines;
+                const longAreas = longData.timeSeries[0].areas;
+                const longTempAreas = longData.timeSeries[1] ? longData.timeSeries[1].areas : [];
+
+                html += `
+                    <div class="card">
+                        <div class="card-title">📅 週間天気予報 (代表地点・区域別)</div>
+                `;
+
+                longAreas.forEach((la, lIdx) => {
+                    html += `
+                        <div class="sub-region-box">
+                            <div class="sub-region-title">📍 ${la.area.name} 周辺エリア (コード: ${la.area.code})</div>
+                            <table>
+                                <tr>
+                                    <th>予報日程</th>
+                                    <th>天気</th>
+                                    <th>降水確率</th>
+                                    <th>最低/最高気温</th>
+                                </tr>
+                    `;
+
+                    longTimes.forEach((ld, dIdx) => {
+                        const code = la.weatherCodes[dIdx];
+                        const pop = la.pops[dIdx] ? la.pops[dIdx] + '%' : '-';
+                        
+                        let minT = '-';
+                        let maxT = '-';
+                        if (longTempAreas[lIdx]) {
+                            minT = longTempAreas[lIdx].tempsMin[dIdx] || '-';
+                            maxT = longTempAreas[lIdx].tempsMax[dIdx] || '-';
+                        }
+
+                        html += `
+                            <tr>
+                                <td style="font-weight:bold;">${formatDateTime(ld).split(' ')[0]}</td>
+                                <td style="font-size:1.2rem;">${getWeatherEmoji(code)}</td>
+                                <td style="color:var(--primary); font-weight:bold;">${pop}</td>
+                                <td><span style="color:blue;">${minT}</span> / <span style="color:red;">${maxT}</span></td>
+                            </tr>
+                        `;
+                    });
+
+                    html += `</table></div>`;
+                });
+
+                html += `</div>`;
+            }
+
+            mainContent.innerHTML = html;
+        }
+
+        // イベントリスナー
+        areaSelect.addEventListener('change', (e) => {
+            const selected = e.target.value;
+            localStorage.setItem('saved_jma_area_detailed', selected);
+            loadWeatherDetail(selected);
+        });
+
+        // 初期ロード
+        window.addEventListener('DOMContentLoaded', () => {
+            const cachedArea = localStorage.getItem('saved_jma_area_detailed') || '250000'; // 初期値は滋賀県(250000)
+            areaSelect.value = cachedArea;
+            loadWeatherDetail(cachedArea);
+        });
+    </script>
+</body>
+</html>
